@@ -75,7 +75,7 @@ function themeColors(el: HTMLElement): Colors {
   };
 }
 
-class GraphEditor {
+export class GraphEditor {
   private vertices = new Map<number, Vertex>();
   private links: Link[] = []; // edges between two different vertices
   private selection: Selection = null;
@@ -487,6 +487,8 @@ class GraphEditor {
     cy.on("viewport", () => this.updatePreview());
 
     cy.on("grab", "node", () => {
+      // A manual drag takes over from Arrange/Undo; never resume its old trajectory.
+      if (this.glide.cancel()) this.finishGlide(false);
       this.dragging = true;
       this.moveRecorded = false;
       this.updatePreview();

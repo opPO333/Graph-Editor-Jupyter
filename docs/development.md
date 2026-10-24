@@ -82,6 +82,8 @@ Done: package skeleton, widget draws the graph, correct planarity check, crossin
 
 Layout uses graph topology and ignores edge `weight` attributes, including in the large-graph fallback. Negative or nonnumeric weights therefore cannot prevent a graph from opening; the original attributes are preserved.
 
+Grabbing a vertex cancels any running Arrange or history animation at the current positions. In frozen mode, the vertex then stays where it is dropped; the cancelled animation cannot move it again after release.
+
 **Non-planar graphs** (`_CrossingSearch`): two phases. First the fewest crossings (vertex movement with random shakes, from the best candidates including a planarization candidate), then better looks (stress plus a vertex-edge distance term) without adding crossings. Details, sources and results: [research/04-crossing-minimization.md](research/04-crossing-minimization.md).
 
 Done: dragging, force/freeze toggle (d3-force, starts with force on, which is gentle enough to keep the first layout and pushes vertices off edges, see research/03 and 05); drawing with Cytoscape.js; zoom buttons and Ctrl+wheel (a plain wheel keeps scrolling the notebook), adding and removing vertices and edges, edits go straight into the NetworkX graph; undo/redo; a preview line and a hint while drawing an edge (research/06); an Arrange button that reruns the first-layout algorithm on the current graph (`widget.arrange()` in Python), with vertices gliding to their new spots (instant with "reduce motion").

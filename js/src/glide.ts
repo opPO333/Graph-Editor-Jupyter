@@ -35,9 +35,11 @@ export class Glide {
     complete?.();
   }
 
-  cancel(): void {
+  cancel(): boolean {
+    const active = this.complete !== null;
     this.cancelFrame(this.frame);
     this.frame = 0;
     this.complete = null;
+    return active;
   }
 }
