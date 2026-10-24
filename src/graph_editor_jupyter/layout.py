@@ -187,10 +187,11 @@ def _candidates(graph: nx.Graph, seed: int, size: tuple[int, int]) -> list[dict]
     if graph.number_of_nodes() >= 4 and is_planar(graph) and nx.node_connectivity(graph) >= 3:
         candidates.append(tutte_layout(graph))
     small = graph.number_of_nodes() <= MAX_NODES_FOR_ALL_CANDIDATES
+    # Layout uses topology only: edge attributes may contain negative or nonnumeric weights.
     if small:
-        candidates.append(nx.kamada_kawai_layout(graph))
+        candidates.append(nx.kamada_kawai_layout(graph, weight=None))
     for offset in SPRING_SEEDS if small else [0]:
-        candidates.append(nx.spring_layout(graph, seed=seed + offset))
+        candidates.append(nx.spring_layout(graph, seed=seed + offset, weight=None))
     if is_planar(graph):
         candidates.append(nx.planar_layout(graph))
     def as_floats(c: dict) -> dict:
@@ -505,7 +506,7 @@ def _layout_component(graph: nx.Graph, seed: int, size: tuple[int, int]) -> dict
     if graph.number_of_nodes() == 1:
         return {next(iter(graph.nodes)): (0.5, 0.5)}
     if graph.number_of_edges() > MAX_EDGES_FOR_SEARCH:
-        pos = nx.planar_layout(graph) if is_planar(graph) else nx.spring_layout(graph, seed=seed)
+        pos = nx.planar_layout(graph) if is_planar(graph) else nx.spring_layout(graph, seed=seed, weight=None)
         return _normalize({v: (float(x), float(y)) for v, (x, y) in pos.items()}, size)
 
     candidates = _candidates(graph, seed, size)

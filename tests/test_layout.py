@@ -5,6 +5,7 @@ import pytest
 from graph_editor_jupyter.layout import (
     DEFAULT_SIZE,
     _CrossingSearch,
+    _candidates,
     badness,
     clearance,
     count_crossings,
@@ -94,6 +95,32 @@ def test_layout_keeps_proportions():
 def test_layout_is_deterministic():
     graph = nx.petersen_graph()
     assert initial_layout(graph) == initial_layout(graph)
+
+
+@pytest.mark.parametrize("weight", [-1, 0, 100, "label"])
+def test_layout_candidates_ignore_edge_weights(weight):
+    graph = nx.cycle_graph(4)
+    expected = _candidates(graph, seed=0, size=DEFAULT_SIZE)
+    nx.set_edge_attributes(graph, weight, "weight")
+    assert _candidates(graph, seed=0, size=DEFAULT_SIZE) == expected
+    assert all(data["weight"] == weight for *_, data in graph.edges(data=True))
+
+
+def test_widget_opens_graph_with_negative_edge_weight():
+    from graph_editor_jupyter import GraphWidget
+
+    graph = nx.Graph([(0, 1, {"weight": -1})])
+    widget = GraphWidget(graph)
+    assert len(widget.positions) == 2
+    assert graph[0][1]["weight"] == -1
+
+
+def test_large_non_planar_layout_ignores_edge_weights(monkeypatch):
+    monkeypatch.setattr("graph_editor_jupyter.layout.MAX_EDGES_FOR_SEARCH", 0)
+    graph = nx.complete_graph(5)
+    expected = initial_layout(graph)
+    nx.set_edge_attributes(graph, -1, "weight")
+    assert initial_layout(graph) == expected
 
 
 @pytest.mark.parametrize("count", [4, 26, 27, 100])
