@@ -96,6 +96,42 @@ def test_layout_is_deterministic():
     assert initial_layout(graph) == initial_layout(graph)
 
 
+@pytest.mark.parametrize("count", [4, 26, 27, 100])
+@pytest.mark.parametrize("size", [(760, 460), (300, 900)])
+def test_many_components_have_positive_separate_slots(monkeypatch, count, size):
+    graph = nx.disjoint_union_all(nx.path_graph(3 + i % 4) for i in range(count))
+    slots = []
+
+    def component_layout(component, seed, component_size):
+        slots.append((list(component), component_size))
+        # Fill both dimensions to expose collapsed or reversed component slots.
+        return {v: (i / (len(component) - 1),) * 2 for i, v in enumerate(component)}
+
+    monkeypatch.setattr("graph_editor_jupyter.layout._layout_component", component_layout)
+    pos = initial_layout(graph, size=size)
+    assert set(pos) == set(graph)
+    boxes = []
+    for nodes, pixel_size in slots:
+        points = np.array([pos[v] for v in nodes])
+        low, high = points.min(axis=0), points.max(axis=0)
+        assert np.all(low >= 0) and np.all(high <= 1)
+        assert np.all(high > low)
+        assert all(abs(pixels - s * span) <= 1 for pixels, s, span in zip(pixel_size, size, high - low))
+        boxes.append((low, high))
+    assert len({low[1] for low, _ in boxes}) > 1
+    for i, (low, high) in enumerate(boxes):
+        for other_low, other_high in boxes[i + 1:]:
+            assert np.any(high < other_low) or np.any(other_high < low)
+
+
+@pytest.mark.parametrize("count", [26, 27, 1000])
+def test_many_isolated_vertices_are_distinct_and_normalized(count):
+    pos = initial_layout(nx.empty_graph(count))
+    assert len(set(pos.values())) == count
+    assert all(0 <= x <= 1 and 0 <= y <= 1 for x, y in pos.values())
+    assert len({y for _, y in pos.values()}) > 1
+
+
 def test_count_crossings_square_with_diagonals():
     graph = nx.complete_graph(4)
     pos = {0: (0, 0), 1: (1, 0), 2: (1, 1), 3: (0, 1)}

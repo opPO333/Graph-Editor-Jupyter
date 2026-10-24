@@ -533,21 +533,33 @@ def _layout_component(graph: nx.Graph, seed: int, size: tuple[int, int]) -> dict
 def initial_layout(graph: nx.Graph, seed: int = 0, size: tuple[int, int] = DEFAULT_SIZE) -> dict[object, Point]:
     """Positions in [0, 1] x [0, 1]. Planar graphs get a crossing-free layout.
 
-    Connected components are laid out separately and placed side by side.
+    Connected components are laid out separately, using multiple rows when needed.
     """
     components = sorted(nx.connected_components(graph), key=len, reverse=True)
     if not components:
         return {}
-    # Give each component a horizontal slot proportional to its size.
-    total = sum(len(c) for c in components)
-    gap = 0.04
-    usable = 1 - gap * (len(components) - 1)
+    count = len(components)
+    # Keep small graphs side by side; otherwise aim for square slots in pixels.
+    columns = count if count <= 3 else min(count - 1, max(1, math.ceil(math.sqrt(count * size[0] / size[1]))))
+    rows = math.ceil(count / columns)
+    # Reserve at most 20% of either axis for gaps, even with many components.
+    gap_x, gap_y = min(0.04, 0.2 / columns), min(0.04, 0.2 / rows)
+    height = (1 - gap_y * (rows - 1)) / rows
     pos = {}
-    left = 0.0
-    for component in components:
-        width = usable * len(component) / total
-        sub = _layout_component(graph.subgraph(component), seed, (max(1, int(size[0] * width)), size[1]))
-        for v, (x, y) in sub.items():
-            pos[v] = (left + x * width, y)
-        left += width + gap
+    for row in range(rows):
+        group = components[row * columns:(row + 1) * columns]
+        total = sum(len(c) for c in group)
+        usable = 1 - gap_x * (len(group) - 1)
+        top = row * (height + gap_y)
+        bottom = 1.0 if row == rows - 1 else top + height
+        left = 0.0
+        for column, component in enumerate(group):
+            # Pin the last boundary to 1 to avoid accumulated rounding overflow.
+            right = 1.0 if column == len(group) - 1 else left + usable * len(component) / total
+            width, row_height = right - left, bottom - top
+            sub_size = (max(1, int(size[0] * width)), max(1, int(size[1] * row_height)))
+            sub = _layout_component(graph.subgraph(component), seed, sub_size)
+            for v, (x, y) in sub.items():
+                pos[v] = (left + x * width, top + y * row_height)
+            left = right + gap_x
     return pos
