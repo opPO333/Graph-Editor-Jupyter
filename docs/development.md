@@ -88,7 +88,7 @@ Not done yet: labels (showing, editing, colors), see requirements.md.
 
 **How edits travel:** the browser sends a message (`add_node`, `add_edge`, `remove_node`, `remove_edge`, `move` when a drag starts, `arrange`) to `GraphWidget._on_msg`, which changes the NetworkX graph and updates the `nodes`/`edges` traits. Positions are owned by the browser and sent back in the `positions` trait after a drag or when the physics settles.
 
-**Undo:** each edit message also carries the positions on screen. Before applying an edit, Python saves a snapshot (nodes and edges with their attributes, ids, positions) on the undo stack, last 100 edits. `undo`/`redo` messages, or `widget.undo()`/`widget.redo()` in Python, restore a snapshot in place and send `set_positions` so the browser moves vertices it already shows. The `can_undo`/`can_redo` traits enable the toolbar buttons.
+**Undo:** each edit message also carries the positions on screen. Before applying an edit, Python saves a snapshot (nodes and edges with their attributes, ids, positions) on the undo stack, last 100 edits. `undo`/`redo` messages, or `widget.undo()`/`widget.redo()` in Python, restore a snapshot in place and send `set_positions` so the browser moves vertices it already shows. Before sending another Undo or Redo, the browser immediately completes any running position animation at its destination, so intermediate animation coordinates never replace historical positions. The `can_undo`/`can_redo` traits enable the toolbar buttons.
 
 ## Licensing
 
