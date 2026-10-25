@@ -256,7 +256,7 @@ def _planar_subgraph(graph: nx.Graph) -> nx.Graph:
     that keeps it planar. The first step of the planarization method."""
     sub = nx.Graph()
     sub.add_nodes_from(graph.nodes)
-    sub.add_edges_from(nx.minimum_spanning_edges(graph, data=False))
+    sub.add_edges_from(nx.minimum_spanning_edges(graph, weight=None, data=False))
     for u, v in graph.edges:
         if u == v or sub.has_edge(u, v):
             continue
