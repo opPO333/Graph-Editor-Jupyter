@@ -6,6 +6,7 @@ from graph_editor_jupyter.layout import (
     DEFAULT_SIZE,
     _CrossingSearch,
     _candidates,
+    _planar_subgraph,
     badness,
     clearance,
     count_crossings,
@@ -113,6 +114,23 @@ def test_widget_opens_graph_with_negative_edge_weight():
     widget = GraphWidget(graph)
     assert len(widget.positions) == 2
     assert graph[0][1]["weight"] == -1
+
+
+@pytest.mark.parametrize("weight", ["label", float("nan")])
+def test_planarization_ignores_edge_weights(weight):
+    graph = nx.complete_graph(5)
+    expected = _planar_subgraph(graph)
+    nx.set_edge_attributes(graph, weight, "weight")
+    subgraph = _planar_subgraph(graph)
+    assert set(subgraph) == set(expected)
+    assert set(subgraph.edges) == set(expected.edges)
+    assert is_planar(subgraph) and nx.is_connected(subgraph)
+    # Constructing the widget exercises planarization through initial_layout too.
+    from graph_editor_jupyter import GraphWidget
+
+    widget = GraphWidget(graph)
+    assert len(widget.positions) == len(graph)
+    assert all(data["weight"] is weight for *_, data in graph.edges(data=True))
 
 
 def test_large_non_planar_layout_ignores_edge_weights(monkeypatch):
