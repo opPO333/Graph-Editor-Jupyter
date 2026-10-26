@@ -78,13 +78,15 @@ cd js && npm run build     # Node in WSL writes into src/.../static/
 
 Done: package skeleton, widget draws the graph, correct planarity check, crossing-free first layout for planar graphs with vertices spread apart (with tests).
 
-**How the first layout is chosen** (`layout.py`): each connected component gets several candidate layouts (tidy tree layout for trees, Tutte embedding for 3-connected planar graphs, Kamada-Kawai, spring layout with several seeds, NetworkX planar layout). The one with the fewest crossings wins, ties broken by the most space between vertices. If the winner is crossing-free but cramped, a force step spreads it out, rejecting any move that would add a crossing.
+**How the first layout is chosen** (`layout.py`): each connected component gets several candidate layouts (tidy tree layout for trees, Tutte embedding for 3-connected planar graphs, Kamada-Kawai, spring layout with several seeds, NetworkX planar layout). For planar graphs, candidates containing crossings are discarded before ranking: zero crossings is mandatory even in a small component slot. The remaining candidates are ranked by crossings plus near-miss penalties, with ties broken by the most space between vertices. If the winner is crossing-free but cramped, a force step spreads it out, rejecting any move that would add a crossing.
 
 Layout uses graph topology and ignores edge `weight` attributes, including in the large-graph fallback. Negative or nonnumeric weights therefore cannot prevent a graph from opening; the original attributes are preserved.
 
 Grabbing a vertex cancels any running Arrange or history animation at the current positions. In frozen mode, the vertex then stays where it is dropped; the cancelled animation cannot move it again after release.
 
 **Non-planar graphs** (`_CrossingSearch`): two phases. First the fewest crossings (vertex movement with random shakes, from the best candidates including a planarization candidate), then better looks (stress plus a vertex-edge distance term) without adding crossings. Details, sources and results: [research/04-crossing-minimization.md](research/04-crossing-minimization.md).
+
+The non-planar candidate pool includes both the crossing-free layout of a large planar subgraph and that subgraph's other candidate layouts. All are scored against the full graph, so enforcing planarity on the subgraph does not remove useful starting points for the non-planar search.
 
 Done: dragging, force/freeze toggle (d3-force, starts with force on, which is gentle enough to keep the first layout and pushes vertices off edges, see research/03 and 05); drawing with Cytoscape.js; zoom buttons and Ctrl+wheel (a plain wheel keeps scrolling the notebook), adding and removing vertices and edges, edits go straight into the NetworkX graph; undo/redo; a preview line and a hint while drawing an edge (research/06); an Arrange button that reruns the first-layout algorithm on the current graph (`widget.arrange()` in Python), with vertices gliding to their new spots (instant with "reduce motion").
 

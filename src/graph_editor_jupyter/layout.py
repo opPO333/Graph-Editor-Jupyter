@@ -505,14 +505,23 @@ class _CrossingSearch:
 def _layout_component(graph: nx.Graph, seed: int, size: tuple[int, int]) -> dict:
     if graph.number_of_nodes() == 1:
         return {next(iter(graph.nodes)): (0.5, 0.5)}
+    planar = is_planar(graph)
     if graph.number_of_edges() > MAX_EDGES_FOR_SEARCH:
-        pos = nx.planar_layout(graph) if is_planar(graph) else nx.spring_layout(graph, seed=seed, weight=None)
+        pos = nx.planar_layout(graph) if planar else nx.spring_layout(graph, seed=seed, weight=None)
         return _normalize({v: (float(x), float(y)) for v, (x, y) in pos.items()}, size)
 
     candidates = _candidates(graph, seed, size)
-    if not is_planar(graph):
+    if planar:
+        # Planarity is mandatory, even when a crossing layout has fewer near-misses.
+        # _candidates always includes NetworkX's crossing-free planar layout.
+        candidates = [pos for pos in candidates if count_crossings(graph, pos) == 0]
+    else:
         # Planarization: draw a large planar part without crossings, then add the rest.
-        candidates.append(_layout_component(_planar_subgraph(graph), seed, size))
+        subgraph = _planar_subgraph(graph)
+        candidates.append(_layout_component(subgraph, seed, size))
+        # A crossing layout of that part may still be a better start for the full,
+        # non-planar graph. Rank its alternatives against the full graph too.
+        candidates.extend(_candidates(subgraph, seed, size))
 
     # Fewest crossings and near-misses first, then the most space between vertices.
     scored = [
@@ -521,7 +530,7 @@ def _layout_component(graph: nx.Graph, seed: int, size: tuple[int, int]) -> dict
     ]
     scored.sort(key=lambda item: item[:3], reverse=True)
     neg_badness, space, _, best = scored[0]
-    if not is_planar(graph) and neg_badness < 0:
+    if not planar and neg_badness < 0:
         starts = [pos for *_, pos in scored[:SEARCH_STARTS]]
         best = _CrossingSearch(graph, size, seed).run(starts, time.monotonic() + SEARCH_SECONDS, POLISH_SECONDS)
     elif count_crossings(graph, best) == 0 and space < GOOD_CLEARANCE:

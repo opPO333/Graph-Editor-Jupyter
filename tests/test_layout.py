@@ -55,6 +55,22 @@ def test_planar_layout_has_no_crossings(name):
     assert count_crossings(graph, pos) == 0
 
 
+@pytest.mark.parametrize("graph", [nx.cubical_graph(), nx.grid_2d_graph(4, 5)])
+@pytest.mark.parametrize("size", [(100, 60), (60, 100)])
+def test_cramped_planar_layout_keeps_zero_crossings(graph, size):
+    # Near-miss penalties in a small area must not make a crossing candidate win.
+    pos = initial_layout(graph, size=size)
+    assert set(pos) == set(graph)
+    assert count_crossings(graph, pos) == 0
+    assert all(0 <= x <= 1 and 0 <= y <= 1 for x, y in pos.values())
+
+
+def test_planar_components_keep_zero_crossings_in_small_slots():
+    graph = nx.disjoint_union_all(nx.cubical_graph() for _ in range(4))
+    pos = initial_layout(graph, size=(200, 120))
+    assert count_crossings(graph, pos) == 0
+
+
 @pytest.mark.parametrize("name", {**PLANAR, **NON_PLANAR})
 def test_layout_is_normalized(name):
     graph = {**PLANAR, **NON_PLANAR}[name]
