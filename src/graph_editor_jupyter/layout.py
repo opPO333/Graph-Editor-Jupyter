@@ -27,6 +27,7 @@ REFINE_SECONDS = 1.0  # time budget for refining one component
 SEARCH_SECONDS = 1.6  # time budget for the crossing phase of one component
 POLISH_SECONDS = 0.8  # time budget for the stress phase
 SEARCH_GRID = (32, 20)  # candidate spots per axis when moving a vertex
+SCORING_BATCH_ELEMENTS = 1_000_000  # target broadcast elements per batch (at least one spot)
 MIN_VERTEX_GAP = 36.0  # pixels kept between vertex centres (two radii plus a little)
 MIN_EDGE_GAP = 18.0  # pixels kept between a vertex and an edge it isn't part of
 # A near-miss (edge through or grazing a vertex, vertices on top of each other) is ambiguous:
@@ -352,8 +353,22 @@ class _CrossingSearch:
         crowding = ((CLEARANCE_GOAL / np.maximum(gaps, 1.0)) ** 2)[~own].sum()
         return float(stress + crowding)
 
+    def _spot_batch_size(self, i: int) -> int:
+        # Largest broadcasts are spots x degree x edges (crossings) and
+        # spots x degree x vertices (near-misses and energy).
+        per_spot = max(1, len(self.neighbours[i])) * max(1, len(self.edges), len(self.nodes))
+        return max(1, SCORING_BATCH_ELEMENTS // per_spot)
+
     def spot_energy(self, p: np.ndarray, i: int, spots: np.ndarray) -> np.ndarray:
-        """The terms of energy() that involve vertex i, if it were at each spot."""
+        """The terms of energy() involving vertex i, evaluated in memory-bounded batches."""
+        result = np.empty(len(spots))
+        batch_size = self._spot_batch_size(i)
+        for start in range(0, len(spots), batch_size):
+            end = start + batch_size
+            result[start:end] = self._spot_energy_batch(p, i, spots[start:end])
+        return result
+
+    def _spot_energy_batch(self, p: np.ndarray, i: int, spots: np.ndarray) -> np.ndarray:
         dist = np.linalg.norm(spots[:, None] - p[None], axis=-1)  # (spots, all vertices)
         result = (self.weight[i][None] * (dist - self.target[i][None]) ** 2).sum(axis=1) / self.unit**2
         if not len(self.edges):
@@ -383,7 +398,15 @@ class _CrossingSearch:
         return crossings + NEAR_MISS_COST * near
 
     def spot_terms(self, p: np.ndarray, i: int, spots: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Crossings and near-misses involving vertex i if it were at each spot."""
+        """Crossings and near-misses at each spot, evaluated in memory-bounded batches."""
+        crossings, near = np.empty(len(spots)), np.empty(len(spots))
+        batch_size = self._spot_batch_size(i)
+        for start in range(0, len(spots), batch_size):
+            end = start + batch_size
+            crossings[start:end], near[start:end] = self._spot_terms_batch(p, i, spots[start:end])
+        return crossings, near
+
+    def _spot_terms_batch(self, p: np.ndarray, i: int, spots: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         nbrs = self.neighbours[i]
         edges = self.edges
         w = p[nbrs]

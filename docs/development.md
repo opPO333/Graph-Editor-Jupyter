@@ -88,6 +88,8 @@ Grabbing a vertex cancels any running Arrange or history animation at the curren
 
 The non-planar candidate pool includes both the crossing-free layout of a large planar subgraph and that subgraph's other candidate layouts. All are scored against the full graph, so enforcing planarity on the subgraph does not remove useful starting points for the non-planar search.
 
+Candidate positions are scored in adaptive batches based on vertex degree and graph size. Both crossing/near-miss scores and geometry energy use batching, so a high-degree vertex cannot allocate arrays for the whole search grid at once.
+
 Done: dragging, force/freeze toggle (d3-force, starts with force on, which is gentle enough to keep the first layout and pushes vertices off edges, see research/03 and 05); drawing with Cytoscape.js; zoom buttons and Ctrl+wheel (a plain wheel keeps scrolling the notebook), adding and removing vertices and edges, edits go straight into the NetworkX graph; undo/redo; a preview line and a hint while drawing an edge (research/06); an Arrange button that reruns the first-layout algorithm on the current graph (`widget.arrange()` in Python), with vertices gliding to their new spots (instant with "reduce motion").
 
 Not done yet: labels (showing, editing, colors), see requirements.md.

@@ -242,10 +242,12 @@ def test_edge_through_a_vertex_is_not_better_than_a_crossing():
     assert badness(graph, pos) > 1
 
 
+@pytest.mark.parametrize("batch_elements", [1_000_000, 100, 1])
 @pytest.mark.parametrize("graph", [nx.complete_graph(5), nx.petersen_graph(), nx.random_regular_graph(3, 12, seed=2)])
-def test_local_scores_match_the_global_score(graph):
+def test_local_scores_match_the_global_score(graph, batch_elements, monkeypatch):
     # Regression: the search compares spots using only the terms that change when one vertex
     # moves. If those disagree with badness(), the search goes round in circles.
+    monkeypatch.setattr("graph_editor_jupyter.layout.SCORING_BATCH_ELEMENTS", batch_elements)
     rng = np.random.default_rng(0)
     search = _CrossingSearch(graph, DEFAULT_SIZE, seed=0)
     p = rng.uniform(0, 1, (len(search.nodes), 2)) * DEFAULT_SIZE
@@ -258,9 +260,11 @@ def test_local_scores_match_the_global_score(graph):
             assert local[k] - local[0] == search.score(moved) - search.score(p)
 
 
+@pytest.mark.parametrize("batch_elements", [1_000_000, 100, 1])
 @pytest.mark.parametrize("graph", [nx.complete_graph(5), nx.petersen_graph(), nx.random_regular_graph(3, 12, seed=2)])
-def test_local_energy_matches_the_global_energy(graph):
+def test_local_energy_matches_the_global_energy(graph, batch_elements, monkeypatch):
     # Same guard for the second phase: spot_energy must change exactly like energy().
+    monkeypatch.setattr("graph_editor_jupyter.layout.SCORING_BATCH_ELEMENTS", batch_elements)
     rng = np.random.default_rng(1)
     search = _CrossingSearch(graph, DEFAULT_SIZE, seed=0)
     p = rng.uniform(0, 1, (len(search.nodes), 2)) * DEFAULT_SIZE
@@ -271,3 +275,30 @@ def test_local_energy_matches_the_global_energy(graph):
             moved = p.copy()
             moved[i] = spots[k]
             assert local[k] - local[0] == pytest.approx(search.energy(moved) - search.energy(p), rel=1e-6, abs=1e-6)
+
+
+@pytest.mark.parametrize("method", ["spot_scores", "spot_energy"])
+def test_high_degree_candidate_scoring_bounds_broadcasts(method, monkeypatch):
+    from graph_editor_jupyter import layout
+
+    graph = nx.complete_graph(5)
+    graph.add_edges_from((0, node) for node in range(5, 395))
+    assert graph.number_of_edges() == 400 and graph.degree(0) == 394
+    search = _CrossingSearch(graph, DEFAULT_SIZE, seed=0)
+    p = np.random.default_rng(0).uniform(0, 1, (len(graph), 2)) * DEFAULT_SIZE
+    spots = np.vstack([p[0], p[search.neighbours[0]].mean(axis=0), search.grid])
+    budget = 1_000_000
+
+    def bounded(function):
+        def checked(a, b, c):
+            # Check before allocating: the old implementation would need gigabytes.
+            shape = np.broadcast_shapes(a.shape[:-1], b.shape[:-1], c.shape[:-1])
+            assert np.prod(shape) <= budget, f"oversized scoring broadcast: {shape}"
+            return function(a, b, c)
+        return checked
+
+    monkeypatch.setattr(layout, "_orient", bounded(layout._orient))
+    monkeypatch.setattr(layout, "_segment_distance", bounded(layout._segment_distance))
+    values = getattr(search, method)(p, 0, spots)
+    assert values.shape == (len(spots),)
+    assert np.isfinite(values).all()
